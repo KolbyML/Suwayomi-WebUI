@@ -46,11 +46,17 @@ export const OCRProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         localStorage.setItem('mangatan_settings_v3', JSON.stringify(settings));
 
-        // Inject Dynamic CSS Variables
         const theme = COLOR_THEMES[settings.colorTheme] || COLOR_THEMES.blue;
         document.documentElement.style.setProperty('--ocr-accent', theme.accent);
-        document.documentElement.style.setProperty('--ocr-bg', '#ffffff');
-        document.documentElement.style.setProperty('--ocr-text-color', '#000000');
+
+        if (settings.brightnessMode === 'dark') {
+            document.documentElement.style.setProperty('--ocr-bg', '#1a1d21');
+            document.documentElement.style.setProperty('--ocr-text-color', '#eaeaea');
+        } else {
+            document.documentElement.style.setProperty('--ocr-bg', '#ffffff');
+            document.documentElement.style.setProperty('--ocr-text-color', '#000000');
+        }
+
         document.documentElement.style.setProperty('--ocr-opacity', settings.dimmedOpacity.toString());
         document.documentElement.style.setProperty('--ocr-scale', settings.focusScaleMultiplier.toString());
 
