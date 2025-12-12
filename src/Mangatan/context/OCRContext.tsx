@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
-import { Settings, DEFAULT_SETTINGS, MergeState, OcrBlock, COLOR_THEMES } from '@/Mangatan/types';
+import { Settings, DEFAULT_SETTINGS, MergeState, OcrBlock, COLOR_THEMES, ServerSettingsData } from '@/Mangatan/types';
+import { requestManager } from '@/lib/requests/RequestManager';
 
 export type OcrStatus = 'loading' | 'error' | 'success' | 'idle';
 
 interface OCRContextType {
     settings: Settings;
     setSettings: React.Dispatch<React.SetStateAction<Settings>>;
+    serverSettings: ServerSettingsData | null; // EXPOSED LIVE SETTINGS
     ocrCache: Map<string, OcrBlock[]>;
     updateOcrData: (imgSrc: string, data: OcrBlock[]) => void;
     ocrStatusMap: Map<string, OcrStatus>;
@@ -21,6 +23,10 @@ interface OCRContextType {
 const OCRContext = createContext<OCRContextType | undefined>(undefined);
 
 export const OCRProvider = ({ children }: { children: ReactNode }) => {
+    // 1. Hook into Global Request Manager (Apollo Store)
+    const { data: serverSettingsData } = requestManager.useGetServerSettings();
+    const serverSettings: ServerSettingsData | null = serverSettingsData?.settings || null;
+
     const [settings, setSettings] = useState<Settings>(() => {
         const saved = localStorage.getItem('mangatan_settings_v3');
         return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
@@ -32,13 +38,12 @@ export const OCRProvider = ({ children }: { children: ReactNode }) => {
     const [activeImageSrc, setActiveImageSrc] = useState<string | null>(null);
     const [debugLog, setDebugLog] = useState<string[]>([]);
 
-    // Wrap functions in useCallback to prevent unnecessary re-renders
     const addLog = useCallback(
         (msg: string) => {
             if (!settings.debugMode) return;
             const entry = `[${new Date().toLocaleTimeString()}] ${msg}`;
             setDebugLog((prev) => [...prev.slice(-99), entry]);
-            // eslint-disable-next-line no-console
+             // eslint-disable-next-line no-console
             console.log(`[OCR] ${entry}`);
         },
         [settings.debugMode],
@@ -73,11 +78,11 @@ export const OCRProvider = ({ children }: { children: ReactNode }) => {
         else document.body.classList.remove('mobile-mode');
     }, [settings]);
 
-    // Wrap the context value in useMemo
     const contextValue = useMemo(
         () => ({
             settings,
             setSettings,
+            serverSettings, // Exposed here
             ocrCache,
             updateOcrData,
             ocrStatusMap, 
@@ -89,7 +94,7 @@ export const OCRProvider = ({ children }: { children: ReactNode }) => {
             debugLog,
             addLog,
         }),
-        [settings, ocrCache, updateOcrData, ocrStatusMap, setOcrStatus, mergeAnchor, activeImageSrc, debugLog, addLog],
+        [settings, serverSettings, ocrCache, updateOcrData, ocrStatusMap, setOcrStatus, mergeAnchor, activeImageSrc, debugLog, addLog],
     );
 
     return <OCRContext.Provider value={contextValue}>{children}</OCRContext.Provider>;

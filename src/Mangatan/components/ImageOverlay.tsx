@@ -7,36 +7,37 @@ import { TextBox } from '@/Mangatan/components/TextBox';
 import { StatusIcon } from '@/Mangatan/components/StatusIcon';
 
 export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
-    const { settings, ocrCache, updateOcrData, setActiveImageSrc, mergeAnchor, ocrStatusMap, setOcrStatus } = useOCR();
+    // Destructure serverSettings from the context
+    const { settings, serverSettings, ocrCache, updateOcrData, setActiveImageSrc, mergeAnchor, ocrStatusMap, setOcrStatus } = useOCR();
     const [data, setData] = useState<OcrBlock[] | null>(null);
 
     const currentStatus: OcrStatus = ocrCache.has(img.src) ? 'success' : (ocrStatusMap.get(img.src) || 'idle');
-
-    // Coordinates for Absolute Positioning
     const [rect, setRect] = useState<DOMRect | null>(null);
     const [pageOffset, setPageOffset] = useState({ top: 0, left: 0 });
-
-    // Visibility State
     const [isVisible, setIsVisible] = useState(false);
-
-    // Refs for Stability (Fixes the "hover stops working" bug)
+    
     const containerRef = useRef<HTMLDivElement>(null);
     const hideTimerRef = useRef<number | null>(null);
-    const isHoveringRef = useRef(false); // Tracks if mouse is physically over Image OR Overlay
+    const isHoveringRef = useRef(false);
 
     const fetchOCR = useCallback(async () => {
         if (!img.src || ocrCache.has(img.src)) return;
 
         try {
             setOcrStatus(img.src, 'loading');
-            // eslint-disable-next-line no-console
             console.log(`Fetching OCR for: ${img.src}`);
+            
+            let url = `/api/ocr/ocr?url=${encodeURIComponent(img.src)}`;
 
-            const url = `/api/ocr/ocr?url=${encodeURIComponent(img.src)}`;
+            // USE LIVE GLOBAL SETTINGS
+            if (serverSettings?.authUsername?.trim() && serverSettings?.authPassword?.trim()) {
+                url += `&user=${encodeURIComponent(serverSettings.authUsername.trim())}`;
+                url += `&pass=${encodeURIComponent(serverSettings.authPassword.trim())}`;
+            }
+
             const result = await apiRequest<OcrBlock[]>(url);
 
             if (Array.isArray(result)) {
-                // updateOcrData automatically sets status to 'success'
                 updateOcrData(img.src, result);
                 setData(result);
             } else {
@@ -47,9 +48,8 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
             console.error("OCR Failed:", err);
             setOcrStatus(img.src, 'error');
         }
-    }, [img.src, ocrCache, setOcrStatus, updateOcrData]);
+    }, [img.src, ocrCache, setOcrStatus, updateOcrData, serverSettings]); // Dependency ensures update on auth change
 
-    // 1. Fetch OCR Data
     useEffect(() => {
         if (!img.src) return;
         if (ocrCache.has(img.src)) {
@@ -66,6 +66,7 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
         else img.onload = fetchOCR;
     }, [fetchOCR, img.complete, ocrCache, img.src, currentStatus, setOcrStatus, ocrStatusMap]);
 
+    // ... (Standard positioning and hover logic) ...
     useEffect(() => {
         const updateRect = () => {
             const r = img.getBoundingClientRect();
@@ -86,7 +87,6 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
         };
     }, [img]);
 
-    // 3. Robust Hover Logic (Attached to Native Image)
     useEffect(() => {
         const clearHideTimer = () => {
             if (hideTimerRef.current) {
@@ -103,23 +103,19 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
         };
 
         const hide = () => {
-            // Add a delay to allow moving from Image -> TextBox
             clearHideTimer();
             hideTimerRef.current = window.setTimeout(() => {
-                // Only hide if we aren't holding a merge anchor and we aren't technically hovering
                 if (!mergeAnchor && !isHoveringRef.current) {
                     setIsVisible(false);
                 }
-            }, 400); // 400ms grace period
+            }, 400); 
         };
 
-        // Native Image Listeners
         const onImgEnter = () => {
             isHoveringRef.current = true;
             show();
         };
         const onImgLeave = (e: MouseEvent) => {
-            // Check if we moved into the overlay container (React Portal)
             if (
                 containerRef.current &&
                 e.relatedTarget instanceof Node &&
@@ -139,9 +135,8 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
             img.removeEventListener('mouseleave', onImgLeave);
             clearHideTimer();
         };
-    }, [img, mergeAnchor]);
+    }, [img, mergeAnchor, setActiveImageSrc]);
 
-    // Data Handlers
     const handleUpdate = (index: number, newText: string) => {
         if (!data) return;
         const newData = [...data];
@@ -190,7 +185,6 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
     const shouldShowOverlay = data || currentStatus === 'loading' || currentStatus === 'error';
     if (!shouldShowOverlay) return null;
 
-    // React Overlay Events
     const onOverlayEnter = () => {
         isHoveringRef.current = true;
         if (hideTimerRef.current) {
@@ -207,20 +201,11 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
         }, 400);
     };
 
-    // Class construction for Solo Mode
     const containerClasses = [
         'ocr-overlay-container',
         isVisible ? 'visible' : '',
         settings.soloHoverMode ? 'solo-mode' : '',
-    ]
-        .filter(Boolean)
-        .join(' ');
-
-    // Opacity Logic
-    // If Debug/Click/Mobile: Always 1
-    // If Hover Mode: 1 if active, 0 if inactive
-    const opacity =
-        isVisible || settings.interactionMode === 'click' || settings.debugMode || settings.mobileMode ? 1 : 0;
+    ].filter(Boolean).join(' ');
 
     return createPortal(
         <div
@@ -232,16 +217,13 @@ export const ImageOverlay: React.FC<{ img: HTMLImageElement }> = ({ img }) => {
                 left: pageOffset.left,
                 width: rect.width,
                 height: rect.height,
-                pointerEvents: 'none', // Lets clicks pass through to image
+                pointerEvents: 'none',
                 zIndex: 99999,
                 opacity: (isVisible || settings.interactionMode === 'click' || settings.mobileMode || settings.debugMode || currentStatus === 'loading' || currentStatus === 'error') ? 1 : 0,
             }}
             onMouseEnter={onOverlayEnter}
             onMouseLeave={onOverlayLeave}
         >
-            {/* Logic: If we are visible, map the boxes. 
-         We do NOT filter data based on hover here; CSS handles the hiding in Solo Mode. 
-      */}
             <StatusIcon status={currentStatus} onRetry={fetchOCR} />
             {settings.enableOverlay && (isVisible || settings.interactionMode === 'click' || settings.mobileMode || settings.debugMode) &&
             data?.map((block, i) => (

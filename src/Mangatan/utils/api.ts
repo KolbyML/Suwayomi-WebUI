@@ -20,7 +20,7 @@ export const apiRequest = async <T>(
     if (isUserScript) {
         return new Promise((resolve, reject) => {
             GMXmlXttpRequest({
-                url: fullUrl, // Use fullUrl here
+                url: fullUrl,
                 method: options.method || 'GET',
                 headers: { 'Content-Type': 'application/json', ...options.headers },
                 data: options.body ? JSON.stringify(options.body) : undefined,
@@ -39,7 +39,6 @@ export const apiRequest = async <T>(
         });
     }
 
-    // Standard fetch handles relative URLs fine, but fullUrl doesn't hurt.
     const response = await fetch(fullUrl, {
         method: options.method || 'GET',
         headers: { 'Content-Type': 'application/json', ...options.headers },
@@ -52,14 +51,22 @@ export const apiRequest = async <T>(
 
 export type ChapterStatus = 'idle' | 'processing' | 'processed';
 
-export const checkChapterStatus = async (baseUrl: string): Promise<ChapterStatus> => {
+export interface AuthCredentials {
+    user?: string;
+    pass?: string;
+}
+
+export const checkChapterStatus = async (baseUrl: string, creds?: AuthCredentials): Promise<ChapterStatus> => {
     try {
+        const body: any = { base_url: baseUrl, context: 'Check Status' };
+        if (creds?.user) body.user = creds.user;
+        if (creds?.pass) body.pass = creds.pass;
+
         const res = await apiRequest<{ status: string }>('/api/ocr/is-chapter-preprocessed', {
             method: 'POST',
-            body: { base_url: baseUrl, context: 'Check Status' }
+            body: body
         });
         
-        // Map backend response to our type
         if (res.status === 'processing') return 'processing';
         if (res.status === 'processed') return 'processed';
         return 'idle';
@@ -69,10 +76,14 @@ export const checkChapterStatus = async (baseUrl: string): Promise<ChapterStatus
     }
 };
 
-export const preprocessChapter = async (baseUrl: string): Promise<void> => {
+export const preprocessChapter = async (baseUrl: string, creds?: AuthCredentials): Promise<void> => {
+    const body: any = { base_url: baseUrl, context: document.title };
+    if (creds?.user) body.user = creds.user;
+    if (creds?.pass) body.pass = creds.pass;
+
     await apiRequest('/api/ocr/preprocess-chapter', {
         method: 'POST',
-        body: { base_url: baseUrl, context: document.title }
+        body: body
     });
 };
 

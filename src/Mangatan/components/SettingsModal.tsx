@@ -57,27 +57,6 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                     <h2>Settings</h2>
                 </div>
                 <div className="ocr-modal-content">
-                    <h3>Suwayomi Server Login (Leave Empty if auth not set)</h3>
-                    <div className="grid">
-                        {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-                        <label htmlFor="ocrUser">User (Opt)</label>
-                        <input
-                            id="ocrUser"
-                            value={localSettings.imageServerUser || ''}
-                            onChange={(e) => handleChange('imageServerUser', e.target.value)}
-                            placeholder="Image Server Username"
-                        />
-                        {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-                        <label htmlFor="ocrPass">Pass (Opt)</label>
-                        <input
-                            id="ocrPass"
-                            type="password"
-                            value={localSettings.imageServerPassword || ''}
-                            onChange={(e) => handleChange('imageServerPassword', e.target.value)}
-                            placeholder="Image Server Password"
-                        />
-                    </div>
-
                     <h3>Visuals</h3>
                     <div className="grid">
                         {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}

@@ -20,9 +20,13 @@ export interface SiteConfig {
 
 export type ColorTheme = 'blue' | 'red' | 'green' | 'orange' | 'purple' | 'turquoise' | 'pink' | 'grey';
 
+// Subset of the Global Server Settings we care about
+export interface ServerSettingsData {
+    authUsername?: string;
+    authPassword?: string;
+}
+
 export interface Settings {
-    imageServerUser?: string;
-    imageServerPassword?: string;
     interactionMode: 'hover' | 'click';
     colorTheme: ColorTheme;
     brightnessMode: 'light' | 'dark';
@@ -68,22 +72,21 @@ export const DEFAULT_SETTINGS: Settings = {
     disableStatusIcon: false,
     deleteModifierKey: 'Alt',
     mergeModifierKey: 'Control',
-    site: 
-        {
-            imageContainerSelectors: [
-                'div.muiltr-masn8',
-                'div.muiltr-79elbk',
-                'div.muiltr-u43rde',
-                'div.muiltr-1r1or1s',
-                'div.muiltr-18sieki',
-                'div.muiltr-cns6dc',
-                '.MuiBox-root.muiltr-1noqzsz',
-                '.MuiBox-root.muiltr-1tapw32',
-                'img[src*="/api/v1/manga/"]',
-            ],
-            overflowFixSelector: '.MuiBox-root.muiltr-13djdhf',
-            contentRootSelector: '#root',
-        },
+    site: {
+        imageContainerSelectors: [
+            'div.muiltr-masn8',
+            'div.muiltr-79elbk',
+            'div.muiltr-u43rde',
+            'div.muiltr-1r1or1s',
+            'div.muiltr-18sieki',
+            'div.muiltr-cns6dc',
+            '.MuiBox-root.muiltr-1noqzsz',
+            '.MuiBox-root.muiltr-1tapw32',
+            'img[src*="/api/v1/manga/"]',
+        ],
+        overflowFixSelector: '.MuiBox-root.muiltr-13djdhf',
+        contentRootSelector: '#root',
+    },
 };
 
 export const COLOR_THEMES: Record<ColorTheme, { accent: string; background: string }> = {
