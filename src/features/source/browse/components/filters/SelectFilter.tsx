@@ -1,0 +1,62 @@
+/*
+ * Copyright (C) Contributors to the Suwayomi project
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+import React from 'react';
+import InputLabel from '@mui/material/InputLabel';
+import FormControl from '@mui/material/FormControl';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import { IPos } from '@/features/source/Source.types.ts';
+
+interface Props {
+    values: any;
+    name: string;
+    state: number;
+    position: number;
+    updateFilterValue: (update: IPos[]) => void;
+    group: number | undefined;
+    update: IPos[];
+}
+
+function noSelect(
+    values: string[],
+    name: string,
+    state: number,
+    position: number,
+    updateFilterValue: (update: IPos[]) => void,
+    update: IPos[],
+    group?: number,
+) {
+    if (values?.length) {
+        const selectedIndex = state >= 0 && state < values.length ? state : 0;
+
+        const handleChange = (event: { target: { name: any; value: any } }) => {
+            const vall = values.indexOf(`${event.target.value}`);
+            const upd = update.filter((e) => !(position === e.position && group === e.group));
+            updateFilterValue([...upd, { type: 'selectState', position, state: vall, group }]);
+        };
+
+        const rett = values.map((value: string) => (
+            <MenuItem key={`${name} ${value}`} value={value}>
+                {value}
+            </MenuItem>
+        ));
+        return (
+            <FormControl sx={{ my: 1 }} variant="standard">
+                <InputLabel>{name}</InputLabel>
+                <Select name={name} value={values[selectedIndex]} label={name} onChange={handleChange}>
+                    {rett}
+                </Select>
+            </FormControl>
+        );
+    }
+    return null;
+}
+
+export const SelectFilter: React.FC<Props> = ({ values, name, state, position, updateFilterValue, update, group }) =>
+    noSelect(values, name, state, position, updateFilterValue, update, group);

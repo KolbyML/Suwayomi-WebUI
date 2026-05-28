@@ -1,0 +1,194 @@
+/*
+ * Copyright (C) Contributors to the Suwayomi project
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+import React, { ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Direction, ThemeProvider, useColorScheme } from '@mui/material/styles';
+import { CacheProvider } from '@emotion/react';
+import { AppTheme, AppThemes, getTheme } from '@/features/theme/services/AppThemes.ts';
+import {
+    createUpdateMetadataServerSettings,
+    useMetadataServerSettings,
+} from '@/features/settings/services/ServerSettingsMetadata.ts';
+import { useLocalStorage } from '@/base/hooks/useStorage.tsx';
+import { MUI_THEME_MODE_KEY } from '@/lib/mui/MUI.constants.ts';
+import { MediaQuery } from '@/base/utils/MediaQuery.tsx';
+import { makeToast } from '@/base/utils/Toast.ts';
+import { getErrorMessage } from '@/lib/HelperFunctions.ts';
+import { createAndSetTheme } from '@/features/theme/services/ThemeCreator.ts';
+import { AppStorage } from '@/lib/storage/AppStorage.ts';
+import { DIRECTION_TO_CACHE } from '@/features/theme/ThemeDirectionCache.ts';
+import { TAppThemeContext, ThemeMode } from '@/features/theme/AppTheme.types.ts';
+
+export const AppThemeContext = React.createContext<TAppThemeContext>({
+    appTheme: 'default',
+    setAppTheme: (): void => {},
+    themeMode: ThemeMode.SYSTEM,
+    setThemeMode: (): void => {},
+    shouldUsePureBlackMode: false,
+    setShouldUsePureBlackMode: (): void => {},
+    dynamicColor: null,
+    setDynamicColor: (): void => {},
+});
+
+export const useAppThemeContext = () => useContext(AppThemeContext);
+
+const ThemeModeInitializer = ({ children, mode }: { children: ReactNode; mode: ThemeMode }) => {
+    const { setMode } = useColorScheme();
+
+    useEffect(() => {
+        setMode(mode);
+    }, [mode, setMode]);
+
+    return <>{children}</>;
+};
+
+export const AppThemeContextProvider = ({ children }: { children: ReactNode }) => {
+    const { t, i18n } = useTranslation();
+    const {
+        metadata: metadataServerSettings,
+        request: metadataServerSettingsRequest,
+        settings: { appTheme: serverAppTheme, themeMode, shouldUsePureBlackMode, customThemes },
+    } = useMetadataServerSettings();
+    const [localAppTheme, setLocalAppTheme] = useLocalStorage<AppTheme>(
+        'appTheme',
+        getTheme(serverAppTheme, customThemes),
+    );
+    const [pendingAppTheme, setPendingAppTheme] = useState<AppThemes | null>(null);
+    const [localThemeMode] = useLocalStorage(MUI_THEME_MODE_KEY, ThemeMode.LIGHT);
+
+    const directionRef = useRef<Direction>('ltr');
+    const migratedLegacyThemeRef = useRef(false);
+
+    const [systemThemeMode, setSystemThemeMode] = useState<ThemeMode>(MediaQuery.getSystemThemeMode());
+    const [dynamicColor, setDynamicColor] = useState<TAppThemeContext['dynamicColor']>(null);
+
+    const areMetadataServerSettingsReady =
+        !metadataServerSettingsRequest.loading && !metadataServerSettingsRequest.error;
+
+    const appTheme = areMetadataServerSettingsReady ? (pendingAppTheme ?? serverAppTheme) : localAppTheme.id;
+    const actualThemeMode = areMetadataServerSettingsReady ? themeMode : localThemeMode;
+    const currentDirection = i18n.dir();
+
+    const updateSetting = createUpdateMetadataServerSettings<'appTheme' | 'themeMode' | 'shouldUsePureBlackMode'>((e) =>
+        makeToast(t('global.error.label.failed_to_save_changes'), 'error', getErrorMessage(e)),
+    );
+
+    const applyAppTheme = useCallback(
+        (value: AppThemes) => {
+            setPendingAppTheme(value);
+            setLocalAppTheme(getTheme(value, { [localAppTheme.id]: localAppTheme, ...customThemes }));
+            updateSetting('appTheme', value);
+        },
+        [customThemes, localAppTheme, setLocalAppTheme, updateSetting],
+    );
+
+    const appThemeContext = useMemo(
+        () =>
+            ({
+                appTheme,
+                setAppTheme: applyAppTheme,
+                themeMode,
+                setThemeMode: (value) => updateSetting('themeMode', value),
+                shouldUsePureBlackMode,
+                setShouldUsePureBlackMode: (value) => updateSetting('shouldUsePureBlackMode', value),
+                dynamicColor,
+                setDynamicColor,
+            }) satisfies TAppThemeContext,
+        [themeMode, shouldUsePureBlackMode, appTheme, dynamicColor, applyAppTheme, updateSetting],
+    );
+
+    const theme = useMemo(
+        () =>
+            createAndSetTheme(
+                actualThemeMode as ThemeMode,
+                getTheme(appTheme, { [localAppTheme.id]: localAppTheme, ...customThemes }),
+                shouldUsePureBlackMode,
+                currentDirection,
+                dynamicColor,
+            ),
+        [
+            actualThemeMode,
+            currentDirection,
+            systemThemeMode,
+            shouldUsePureBlackMode,
+            appTheme,
+            customThemes,
+            dynamicColor,
+        ],
+    );
+
+    useLayoutEffect(() => {
+        const unsubscribe = MediaQuery.listenToSystemThemeChange(setSystemThemeMode);
+
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (!areMetadataServerSettingsReady) {
+            return;
+        }
+
+        if (!migratedLegacyThemeRef.current) {
+            migratedLegacyThemeRef.current = true;
+            const legacyThemeMode = AppStorage.local.getItemParsed(MUI_THEME_MODE_KEY, ThemeMode.LIGHT);
+            if (metadataServerSettings?.themeMode == null && legacyThemeMode) {
+                updateSetting('themeMode', legacyThemeMode);
+            }
+            if (metadataServerSettings?.appTheme == null && localAppTheme.id) {
+                updateSetting('appTheme', localAppTheme.id);
+            }
+        }
+
+        if (serverAppTheme !== localAppTheme.id) {
+            setLocalAppTheme(getTheme(serverAppTheme, customThemes));
+        }
+        if (pendingAppTheme && serverAppTheme === pendingAppTheme) {
+            setPendingAppTheme(null);
+        }
+    }, [
+        areMetadataServerSettingsReady,
+        customThemes,
+        localAppTheme,
+        metadataServerSettings?.appTheme,
+        metadataServerSettings?.themeMode,
+        pendingAppTheme,
+        serverAppTheme,
+        setLocalAppTheme,
+        updateSetting,
+    ]);
+
+    useEffect(() => {
+        // The set background color is not necessary anymore, since the theme has been loaded
+        document.documentElement.style.backgroundColor = '';
+
+        AppStorage.local.setItem('theme_background', theme.palette.background.default);
+    }, [theme.palette.background.default]);
+
+    useEffect(() => {
+        const mode = theme.palette.mode;
+        document.documentElement.style.colorScheme = mode;
+    }, [theme.palette.mode]);
+
+    if (directionRef.current !== currentDirection) {
+        document.dir = currentDirection;
+        directionRef.current = currentDirection;
+    }
+
+    return (
+        <AppThemeContext.Provider value={appThemeContext}>
+            <CacheProvider value={DIRECTION_TO_CACHE[currentDirection]}>
+                <ThemeProvider theme={theme}>
+                    <ThemeModeInitializer mode={actualThemeMode as ThemeMode}>
+                        {children}
+                    </ThemeModeInitializer>
+                </ThemeProvider>
+            </CacheProvider>
+        </AppThemeContext.Provider>
+    );
+};
